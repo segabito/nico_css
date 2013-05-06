@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="ja"> 
+<head>
+<meta charset="utf-8"> 
+<title>ニコニコ動画のコメントをCSSアニメーションだけで再現させるテスト</title>
+<style type="text/css">
+.mincho  {font-family: Simsun; }
+.gulim   {font-family: Gulim; }
+.mingLiu {font-family: mingLiu; }
+
+</style>
+<script type="text/javascript">
+
+// 近々やりたい
+// - 16:9対応
+// - フォント対応
+// - ブックマークレットにしてその場で変換
+
+function onSrcReady() {
+	var src = document.getElementById('src').contentDocument.getElementById('xml').innerHTML;
+	document.getElementById('xml_input').value = src;
+	create(document.getElementById('xml_input').value);
+}
+
+function create(text) {
+ 	var nicocanvas = new NicoCanvas( document.getElementById("nico_canvas_offscreen"));
+	var result = nicocanvas.loadText(text);
+	var tpl    = document.getElementById("template").value;
+	document.getElementById("cssview").value = result["css"];
+	document.getElementById("msgview").value = result["msg"];
+	tpl = tpl.replace(/\[CSS\]/, result["css"]);
+	tpl = tpl.replace(/\[MSG\]/, result["msg"]);
+	var w = document.getElementById('preview').contentWindow;//innerHTML = tpl;
+	w.document.open();
+	w.document.write(tpl);
+	w.document.close();
+	document.getElementById("htmlview").value = tpl;
+} //
+
+var NicoCanvas = (function() {
+
+	var NicoColors = {
+	//	'white'  : '#ffffff',
+		'red'    : '#FF0000',
+		'pink'   : '#FF8080',
+		'orange' : '#FFC000',
+		'yellow' : '#FFFF00',
+		'green'  : '#00FF00',
+		'cyan'   : '#00FFFF',
+		'blue'   : '#0000FF',
+		'purple' : '#C000FF',
+		'black'  : '#000000',
+
+		'white2'         : '#CCCC99',
+		'niconicowhite'  : '#CCCC99',
+		'red2'           : '#CC0033',
+		'truered'        : '#CC0033',
+		'pink2'          : '#FF33CC',
+		'orange2'        : '#FF6600',
+		'passionorange'  : '#FF6600',
+		'yellow2'        : '#999900',
+		'madyellow'      : '#999900',
+		'green2'         : '#00CC66',
+		'elementalgreen' : '#00CC66',
+		'cyan2'          : '#00CCCC',
+		'blue2'          : '#3399FF',
+		'marineblue'     : '#3399FF',
+		'purple2'        : '#6633CC',
+		'nobleviolet'    : '#6633CC',
+		'black2'         : '#666666'
+	};
+	
+	// [^ -~｡-ﾟ]* は半角以外の文字の連続
+	var minchoReg = /([^ -~｡-ﾟ]*[ˊˋ⑴⑵⑶⑷⑸⑹⑺⑻⑼⑽⑾⑿⒀⒁⒂⒃⒄⒅⒆⒇⒈⒉⒊⒋⒌⒍⒎⒏⒐⒑⒒⒓⒔⒕⒖⒗⒘⒙⒚⒛▁▂▃▄▅▆▇█▉▊▋▌▍▎▏◢◣◤◥〡〢〣〤〥〦〧〨〩ㄅㄆㄇㄈㄉㄊㄋㄌㄍㄎㄏㄐㄑㄒㄓㄔㄕㄖㄗㄘㄙㄚㄛㄜㄝㄞㄟㄠㄡㄢㄣㄤㄥㄦㄧㄨㄩ︰︱︳︴︵︶︷︸︹︺︻︼︽︾︿﹀﹁﹂﹃﹄﹉﹊﹋﹌﹍﹎﹏﹐﹑﹒﹔﹕﹖﹗﹙﹚﹛﹜﹝﹞﹟﹠﹡﹢﹣﹤﹥﹦﹨﹩﹪﹫]+[^ -~｡-ﾟ]*)/g;
+	var gulimReg = /([^ -~｡-ﾟ]*[㈀㈁㈂㈃㈄㈅㈆㈇㈈㈉㈊㈋㈌㈍㈎㈏㈐㈑㈒㈓㈔㈕㈖㈗㈘㈙㈚㈛㈜㉠㉡㉢㉣㉤㉥㉦㉧㉨㉩㉪㉫㉬㉭㉮㉯㉰㉱㉲㉳㉴㉵㉶㉷㉸㉹㉺㉻㉿ⓐⓑⓒⓓⓔⓕⓖⓗⓘⓙⓚⓛⓜⓝⓞⓟⓠⓡⓢⓣⓤⓥⓦⓧⓨⓩ⒜⒝⒞⒟⒠⒡⒢⒣⒤⒥⒦⒧⒨⒩⒪⒫⒬⒭⒮⒯⒰⒱⒲⒳⒴⒵￦⊙ㅂㅑㅜㆁ▒ㅅㅒㅡㆍㄱㅇㅓㅣㆎㄴㅏㅕㅤ♡ㅁㅐㅗㅿ♥]+[^ -~｡-ﾟ]*)/g;
+	var mingLiuReg = /([^ -~｡-ﾟ]*[]+[^ -~｡-ﾟ]*)/g;
+	
+
+
+	var NicoCanvas = function() { this.initialize.apply(this, arguments); };
+	NicoCanvas.prototype = {
+		offScreenElement: null,
+		width: 544,
+		height: 385,
+		xml: '',
+		top: null,
+		normal: null,
+		bottom: null,
+		textField: null,
+	 	initialize: function(offScreenElement) {
+			this.offScreenElement = offScreenElement;
+
+			this.top    = new NicoTextGroup(this, "TOP");
+			this.normal = new NicoTextGroup(this, "NORMAL");
+			this.bottom = new NicoTextGroup(this, "BOTTOM");
+			
+			this.textField = document.createElement("span");
+			this.textField.style.position   = "absolute";
+			this.textField.style.fontWeight = "bolder";
+		},
+		loadText: function(text) {
+			var parser = new DOMParser();
+			var xml = parser.parseFromString(text, "text/xml");
+			this.xml = xml;
+			return this.loadXml(xml);
+		},
+		loadXml: function(xml) {
+			this.xml = xml;
+			var chats = xml.getElementsByTagName("chat");
+			this.top.reset();
+			this.normal.reset();
+			this.bottom.reset();
+			this.appendChild(this.textField);
+			for (var i = 0, len = Math.min(chats.length, 5000); i < len; i++) {
+				var chat = chats[i];
+				if (!chat.firstChild) continue;
+				var text = chat.firstChild.nodeValue;
+				var attr = chat.attributes;
+				if (!attr) continue;
+		
+				var date = chat.getAttribute("date") || "000000000";
+				var cmd  = chat.getAttribute("mail") || "";
+				var is_premium = (chat.getAttribute("premium") == "1");
+				var userid = chat.getAttribute("user_id");
+				var vpos = chat.getAttribute("vpos");
+				var deleted = chat.getAttribute("deleted");
+				var color = "#FFF";
+				var size = "medium";
+				var group = this.normal;
+				if (deleted == 1) continue;
+				if (cmd.length > 0) {
+					var cmdc = cmd.replace(/(ue|shita|sita|big|small|[ ])/g, '');
+					if (cmdc.match(/(#[0-9a-f]+)/i)) color = RegExp.$1;
+					else
+					if (cmdc.match(/([a-z]+)/i))     color = NicoColors[RegExp.$1] || "#FFF";
+					
+					if (cmd.indexOf("big")   >= 0)   size = "big";
+					else
+					if (cmd.indexOf("small") >= 0)   size = "small";
+
+					if (cmd.indexOf("ue")    >= 0)   group = this.top;
+					else 
+					if (cmd.indexOf("shita") >= 0)   group = this.bottom;
+					
+				}
+
+				group.add(text, vpos, size, color);
+				
+			}
+			var msg = this.top.getHtml() + this.normal.getHtml() + this.bottom.getHtml();
+			var css = this.top.getCss()  + this.normal.getCss()  + this.bottom.getCss();
+			this.offScreenElement.removeChild(this.textField);
+			css = ['<style type="text/css">', css, '</style>'].join("\n");
+			return {"msg": msg, "css": css};
+		},
+
+		appendChild: function(obj) {
+			this.offScreenElement.appendChild(obj);
+		} //
+
+	};
+
+
+	var NicoTextGroup = function() { this.initialize.apply(this, arguments); };
+	NicoTextGroup.prototype = {
+		mode: '',
+		offScreen: null,
+		group: [],
+		initialize: function(offScreen, mode) {
+			this.offScreen = offScreen;
+			this.mode = mode;
+		},
+		reset: function() {
+			this.group = [];
+		},
+		add: function(text, vpos, size, color) {
+			if (!text) return;
+			var tx = new NicoText(this.offScreen);
+
+			// X座標を設定。ここでbeginL,endRが確定する
+			tx.setX(vpos);
+			// フォントサイズを設定
+			tx.setFontSizeType(size);
+			// カラーを設定
+			tx.setColor(color);
+
+			// 文字を設定
+			// この時点で字幕の大きさが確定するので、
+			// Z座標・beginR,endLまでが確定する
+			tx.setText(text);
+
+			if (this.mode == "TOP" || this.mode == "BOTTOM") {
+				tx.setFixedMode(this.mode);
+			} else {
+				tx.setMarqueeMode();
+			}
+
+			//他の字幕との当たり判定(ここでY座標が確定する)
+			this.checkCollision(tx);
+
+			//グループに追加
+			this.group.push(tx);
+
+			return true;
+		}, 
+		checkCollision: function(tx) {
+			var rh = this.offScreen.height - tx.height, o;
+			if (this.mode != "BOTTOM") {
+				for (var i = 0, len = this.group.length; i < len; i++) {
+					o = this.group[i];
+
+					if (o === tx) continue; //自分自身との判定はスキップする
+
+					//他の文字との衝突があったら下にずらしていく
+					if (o.collision(tx)) { 
+						tx.setY(o.y + o.height + 1);
+						// 画面内に入りきらなかったらランダム配置
+						if (tx.y > rh) {
+							tx.setY(Math.floor(Math.random() * rh));
+							tx.overflow = true;
+							return;
+						} else {
+							// ずらした後は再度全チェックするのを忘れずに(再帰)
+							this.checkCollision(tx);
+							return;
+						}
+					}
+				}
+			} else {
+				for (var i = 0, len = this.group.length; i < len; i++) {
+					o = this.group[i];
+
+					if (o === tx) continue; //自分自身との判定はスキップする
+
+					//他の文字との衝突があったら上にずらしていく
+					if (o.collision(tx)) { 
+						tx.setY(o.y - tx.height - 1);
+						// 画面内に入りきらなかったらランダム配置
+						if (tx.y < 0) {
+							tx.setY(Math.floor(Math.random() * rh));
+							tx.overflow = true;
+							return;
+						} else {
+							// ずらした後は再度全チェックするのを忘れずに(再帰)
+							this.checkCollision(tx);
+							return;
+						}
+					}
+				}
+			}
+		},
+		getHtml: function() {
+			var tmp  = [];
+			for (var i = 0, len = this.group.length; i < len; i++) {
+				tmp.push(this.group[i].getHtml());
+			}
+			return tmp.join('');
+		},
+		getCss: function() {
+			var tmp = [];
+			for (var i = 0, len = this.group.length; i < len; i++) {
+				tmp.push(this.group[i].getCss());
+			}
+			return tmp.join("");
+		}
+	};
+
+	var NicoText = function() { this.initialize.apply(this, arguments); };
+	NicoText.prototype = {
+		x: 0, y: 0, id: 0,
+		offScreen: null,
+		text: '',
+		width: 0, height: 0, 
+		duration: 4, // 画面に見えている秒数
+		beginL: 0,   // 左端が見えるようになるタイミング
+		beginR: 0,   // 右端が見えるようになるタイミング
+		endL: 0,     // 左端が見えなくなるタイミング
+		endR: 0,     // 右端が見えなくなるタイミング
+		speed: 0,
+		scale: 1.0,
+		element: null,
+		overflow: false, // 画面からはみ出したフラグ(段幕時)
+		textWidth: 0,
+		fontSizePx: 24,
+		fontSizeType: 'medium',
+		fontFamily: "'MS Pゴシック' Arial Simsun Gulim", // &#xe7cd;
+		
+		color: '#fff',
+		fixed: false, // 固定モード(ueかshita)
+		html: '',
+		css: '',
+		
+		initialize: function(offScreen) {
+			this.offScreen = offScreen;
+			this.id = NicoText.createId();
+		},
+		setX: function(x) {
+			this.x = x;
+			this.beginL = x / 100;
+			this.endR   = this.beginL + this.duration;
+		},
+		setY: function(y) {
+			this.y = y;
+		},
+		setFontSizeType: function(size) {
+			var sz = 24, type = 'normal';
+			switch (size) {
+				case 'big':
+					sz = 39;
+					type = 'big';
+					break;
+				case 'small':
+					sz = 15;
+					type = 'small';
+					break;
+				default:
+					break;
+			}
+			this.fontSizeType = type;
+			this.fontSizePx = sz;
+		},
+		setColor: function(color) {
+			this.color = color;
+		},
+		setText: function(text) {
+			text = text.replace(/[\t \xA0]/g , "&nbsp;").replace(/[\r\n]+$/g, "").replace(/[\n]/g, "&nbsp;<br>");
+			
+			// 特殊文字と、その前後の全角文字のフォントが変わるらしい
+			text = text.replace(minchoReg, '<span class="mincho">$1</span>')
+						.replace(gulimReg, '<span class="gulim">$1</span>')
+						.replace(mingLiuReg, '<span class="mingLiu">$1</span>');
+			// 最初の一文字目が特殊文字だった場合は全体のフォントが変わる
+			var firstLetter = text.charAt(0);
+			if (firstLetter.match(minchoReg))  text = '<span class="mincho">'  + text + '</span>';
+			else
+			if (firstLetter.match(gulimReg))   text = '<span class="gulim">'   + text + '</span>';
+			else
+			if (firstLetter.match(mingLiuReg)) text = '<span class="mingLiu">' + text + '</span>';
+			
+			var field = this.offScreen.textField;
+
+			this.text   = text;
+
+			field.style.fontSize = this.fontSizePx + "px";
+			field.innerHTML = '<nobr>' + text + '</nobr>';
+			this.width  = field.offsetWidth;
+			this.height = this.calculateHeight();
+			this.speed  = (this.width + this.offScreen.width) / this.duration;
+			this.endL   = this.endR   - (this.width / this.speed);
+			this.beginR = this.beginL + (this.width / this.speed);
+			this.element = field;
+		},
+		calculateHeight: function() {
+			// ブラウザから取得したouterHeightを使うより、職人の実測値のほうが信頼できる
+			// http://tokeiyadiary.blog48.fc2.com/blog-entry-90.html
+			// http://www37.atwiki.jp/commentart/pages/43.html#id_a759b2c2
+			var lc = this.text.split('<br>').length;
+			var margin = 4, lineHeight = 29;
+			switch (this.fontSizeType) {
+				case 'big':
+					lineHeight = 45;
+					break;
+				case 'small':
+					lineHeight = 18;
+					break;
+				default:
+					break;
+			}
+			this.lineHeight = lineHeight;
+			if (!this.fixed || this.scale == 1.0) {
+				switch (this.fontSizeType) {
+					case 'big':
+						return ((lc <= 2) ? (45 * lc + 5) : (24 * lc + 3)) - 1;
+					case 'small':
+						return ((lc <= 6) ? (18 * lc + 5) : (10 * lc + 3)) - 1;
+					default:
+					case 'medium':
+						return ((lc <= 4) ? (29 * lc + 5) : (15 * lc + 3)) - 1;
+				}
+			}
+			return ((lineHeight * lc + margin) * this.scale); // 縮小後はmarginの量も減るのでscaleの内側だと思われる
+		},
+		setScale: function(scale) {
+			this.scale  = scale;
+			this.width  = (this.width * scale);
+			this.height = this.calculateHeight();
+		},
+		/**
+		 *	位置固定モードにする(ueかshita)
+		 */
+		setFixedMode: function(position) {
+			this.fixed = true;
+			// はみ出す場合は調整する
+			if (this.width > this.offScreen.width) {
+				this.setScale(this.offScreen.width / this.width);
+			}
+			// 画面の高さの1/3を超える場合は大きさを半分にする
+			if (this.height > this.offScreen.height / 3) {
+				this.setScale(this.scale * 0.5);
+			}
+			// 固定モードの表示時間は3秒
+			this.duration = 3;
+			this.endR = this.beginL + this.duration;
+
+			if (position == "BOTTOM") {
+				this.y = this.offScreen.height - this.height;
+			}
+		},
+		/**
+		 *	流れる文字のモード
+		 */
+		setMarqueeMode: function() {
+			this.beginL -= 1;
+			this.beginR -= 1;
+			this.endL   -= 1;
+			this.endR   -= 1;
+			// 画面の高さの1/3を超える場合は大きさを半分にする
+			if (this.height > this.offScreen.height / 3) {
+				this.setScale(this.scale * 0.5);
+			}
+		},
+		getCss: function() {
+			var b = (100 - (this.duration / (this.beginL + this.duration) * 100));
+			var d = this.duration + this.beginL, ctmp = '';
+			if (!this.fixed) {
+				var scaleCss = (this.scale == 1) ? '' : (' scale(' + this.scale + ')');
+				var ctmp = ['',
+						' @keyframes idou', this.id, ' {\n',
+						'    0%      {opacity: 1; transform: translate(0px, 0px) ', scaleCss, ';}\n',
+						'  100%      {opacity: 1; transform: translate(', -(this.offScreen.width + this.width ), 'px, 0px)', scaleCss, ';}\n',
+						' }\n',
+						' @-webkit-keyframes idou', this.id, ' {\n',
+						'    0%      {opacity: 1; -webkit-transform: translate(0px, 0px) ', scaleCss, ';}\n',
+						'  100%      {opacity: 1; -webkit-transform: translate(', -(this.offScreen.width + this.width ), 'px, 0px)', scaleCss, ';}\n',
+						' }\n',
+						'',
+						' span#nicoText',                  this.id, ' {\n',
+						'  z-index: ',                     (this.id + 100) , ';\n', 
+						'  top:',                          this.y, 'px;\n',
+						'  left:544px;\n',
+						'  color:',                        this.color,      ';opacity: 0;\n',
+						'  font-size:',                    this.fontSizePx, 'px;\n',
+						'  line-height:',                  this.lineHeight, 'px;\n', 
+						'   animation-name: idou',         this.id, ';\n',
+						'   animation-duration: ',         this.duration,    's;\n',
+						'   animation-delay: ',            (this.beginL - 1), 's;\n',
+						'   -webkit-animation-name: idou', this.id, ';\n',
+						'   -webkit-animation-duration: ', this.duration, 's;\n',
+						'   -webkit-animation-delay: ',    (this.beginL - 1), 's;\n',
+						' }\n',
+						'\n\n'];
+			} else {
+
+				var scaleCss = (this.scale == 1) ? '' : ('  transform: scale(' + this.scale + '); -webkit-transform: scale(' + this.scale + ');');
+				var left = ((this.offScreen.width - this.width) / 2);
+				var ctmp = ['',
+						' @keyframes fixed', this.id, ' {\n',
+						'    0% {opacity: 1;}\n',
+						'  100% {opacity: 1;}\n',
+						' }\n',
+						' @-webkit-keyframes fixed', this.id, ' {\n',
+						'    0% {opacity: 1;}\n',
+						'  100% {opacity: 1;}\n',
+						' }\n',
+						'',
+						' span#nicoText',  this.id,          ' {\n',
+						'  z-index: ',     (this.id + 100) , ';\n', 
+						'  top:',          this.y,           'px;\n',
+						'  left:',         left,             'px;\n',
+						'  color:',        this.color,       ';\n',
+						'  font-size:',    this.fontSizePx,  'px;\n',
+						'  line-height:',  this.lineHeight,  'px;\n', 
+						'  opacity:0;\n',
+						scaleCss, 
+						'   animation-name: fixed',         this.id,       ';\n',
+						'   animation-duration: ',          this.duration, 's;\n',
+						'   animation-delay: ',             this.beginL,   's;\n',
+						'   -webkit-animation-name: fixed', this.id,       ';\n',
+						'   -webkit-animation-duration: ',  this.duration, 's;\n',
+						'   -webkit-animation-delay: ',     this.beginL,   's;\n',
+						' }\n',
+						'\n\n'];
+			}
+			
+			this.css  = ctmp.join("");
+			return this.css;
+		},
+		getHtml: function() {
+			this.html = [' <span id="nicoText', this.id, '" class="nicoText"><nobr>', this.text, '</nobr></span>\n'].join('');
+			return this.html;
+		},
+
+		/**
+		*	他のコメントとの衝突判定
+		**/
+		collision: function(o) {
+
+			// 一度はみ出した文字は当たり判定を持たない
+			if (this.overflow) return false; 
+
+			// Y座標が合わないなら絶対衝突しない
+			if (o.y + o.height <= this.y || o.y >=  this.y + this.height) {
+				return false;
+			}
+
+			var rt, lt;
+			if (this.beginL <= o.beginL) {
+				rt = o;
+				lt = this;
+			} else {
+				rt = this;
+				lt = o;
+			}
+			
+			if (this.fixed) {
+				// 左にあるやつの終了より右にあるやつの開始が早いなら、衝突する
+				if (lt.endR >= rt.beginL)   return true;
+			} else {
+
+				// 左にあるやつの右端開始よりも右にあるやつの左端開始のほうが早いなら、衝突する
+				if (lt.beginR >= rt.beginL) return true;
+
+				// 左にあるやつの右端終了よりも右にあるやつの左端終了のほうが早いなら、衝突する
+				if (lt.endR >= rt.endL)     return true;
+
+			}
+
+			return false;
+		} //
+
+	};
+	NicoText.createId = (function() {
+		var id = 0;
+		return function() { return id++; }
+	})();
+
+	return NicoCanvas;
+})();
+
+
+</script>
+</head>
+<body>
+<p>
+	<h2>ニコニコ動画のコメントをCSS3アニメーションに変換してみる (Firefox, Chrome, Safari, IE10用)</h2>
+
+	メッセージサーバーから受信したXMLを↓にコピペして
+	<input 
+		type="button" 
+		onclick="create(document.getElementById('xml_input').value);" 
+		style="font-weight:bolder;"
+		value=" 実行 ">
+</p>
+
+
+
+
+<textarea id="xml_input" style="width:100%;height:15%;" rows="15"></textarea>
+
+<iframe style="width:100%;height:420px;border:0;margin:0;padding:0;overflow:hidden;" scroll="no" id="preview"></iframe>
+
+<p>
+	<h2>■生成されたHTML</h2>
+</p>
+<input type="button" onclick="create(document.getElementById('xml_input').value);" value=" 実行 ">
+<textarea id="cssview" style="width:100%;height:15%;display:none;" rows="15"></textarea>
+<textarea id="msgview" style="width:100%;height:15%;display:none;" rows="15"></textarea>
+<textarea id="htmlview" style="width:100%;height:15%;" rows="15"></textarea>
+
+<textarea id="template" style="width:100%;height:15%;display:none;" rows="10">
+&lt;!DOCTYPE html&gt;
+&lt;html lang="ja"&gt; 
+&lt;head&gt;
+&lt;meta charset="utf-8"&gt; 
+&lt;title&gt;CSS3 DEMO&lt;/title&gt;
+&lt;style type="text/css"&gt;
+div#nico_canvas       {width: 1024px; height: 385px; background: #333; overflow: hidden; }
+div#nico_canvas > div {position: absolute; width: 544px; height: 384px; background: #111;}
+div#nico_canvas .nicoText{
+				font-family: Arial 'MS Pゴシック' Simsun Gulim;
+				letter-spacing: 1px;
+				position: absolute;
+				margin: 2px 1px 1px 1px;
+				font-weight:bolder;
+				text-shadow: 1px 1px #666;
+				transform-origin: 0% 0%;
+				animation-timing-function: linear;
+				-webkit-transform-origin: 0% 0%;
+				-webkit-animation-timing-function: linear;
+}
+.mincho  {font-family: Simsun;}
+.gulim   {font-family: Gulim;}
+.mingLiu {font-family: mingLiu;}
+&lt;/style&gt;
+[CSS]
+&lt;/head&gt;&lt;body&gt;
+&lt;div id="nico_canvas"&gt;
+&lt;div&gt;
+&lt;!--video width="544" height="384" src="" style="z-index:50;" controls autobuffer autoplay&gt;&lt;/video--&gt;
+	[MSG]
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;/body&gt;&lt;/html&gt;
+</textarea>
+<div id="nico_canvas_offscreen" style="width:4096px;height:384px;
+	overflow:hidden;
+				font-family: Arial 'MS Pゴシック' Simsun Gulim;
+				letter-spacing: 1px;
+				position: absolute;
+				margin: 2px 1px 1px 1px;
+				font-weight:bolder;
+				text-shadow: 1px 1px #666;
+				-webkit-transform-origin: 0% 0%;
+				-webkit-animation-timing-function: linear;
+" ></div>
+
+<iframe src="./src.html" id="src" style="display: none;" onload="onSrcReady();"></iframe>
+
+</body>
+</html>
